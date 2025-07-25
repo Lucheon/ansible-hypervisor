@@ -1,0 +1,19 @@
+network:
+  version: 2
+  ethernets:
+    enp1s0:
+      addresses:
+        - {{ libvirt_vm_eth0_ip_address }}
+      gateway4: {{ libvirt_vm_eth0_ip_gateway }}
+      nameservers:
+        addresses:
+          - {{ libvirt_vm_eth0_ip_gateway }}
+          - 8.8.8.8
+    enp2s0:
+      addresses:
+        - {{ libvirt_vm_eth1_ip_address }}
+      gateway4: {{ libvirt_vm_eth1_ip_gateway }}
+      nameservers:
+        addresses:
+          - {{ libvirt_vm_eth1_ip_gateway }}
+          - 8.8.8.8

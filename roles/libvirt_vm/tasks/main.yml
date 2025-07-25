@@ -1,0 +1,170 @@
+---
+- name: Check if vm image exist
+  ansible.builtin.stat:
+    path: "{{ libvirt_vm_img_dest }}/{{ libvirt_vm_name }}-os"
+  register: libvirt_vm_image_stat
+  delegate_to: "{{ libvirt_vm_hypervisor }}"
+
+- name: Create vm image from cloud image
+  ansible.builtin.command:
+    argv:
+      - qemu-img
+      - create
+      - -f
+      - qcow2
+      - -b
+      - "{{ libvirt_vm_img_src_dir }}/{{ libvirt_vm_img_src_file }}"
+      - -F
+      - qcow2
+      - "{{ libvirt_vm_img_dest }}/{{ libvirt_vm_name }}-os-tmp"
+      - "{{ libvirt_vm_img_size }}"
+  when: not libvirt_vm_image_stat.stat.exists
+  delegate_to: "{{ libvirt_vm_hypervisor }}"
+  become: true
+
+- name: Flatten vm image
+  ansible.builtin.command:
+    argv:
+      - qemu-img
+      - convert
+      - -O
+      - qcow2
+      - -c
+      - -p
+      - "{{ libvirt_vm_img_dest }}/{{ libvirt_vm_name }}-os-tmp"
+      - "{{ libvirt_vm_img_dest }}/{{ libvirt_vm_name }}-os"
+  when: not libvirt_vm_image_stat.stat.exists
+  delegate_to: "{{ libvirt_vm_hypervisor }}"
+  become: true
+
+- name: Remove temporary file
+  ansible.builtin.file:
+    path: "{{ libvirt_vm_img_dest }}/{{ libvirt_vm_name }}-os-tmp"
+    state: absent
+  when: not libvirt_vm_image_stat.stat.exists
+  delegate_to: "{{ libvirt_vm_hypervisor }}"
+  become: true
+
+- name: Template cloud init user data
+  ansible.builtin.template:
+    src: cloud-init-user-data.yml.j2
+    dest: /data/libvirt/cloud-init/{{ libvirt_vm_name }}-user-data.yml
+  delegate_to: "{{ libvirt_vm_hypervisor }}"
+  become: true
+
+- name: Template cloud init network config
+  ansible.builtin.template:
+    src: cloud-init-network-config.yml.j2
+    dest: /data/libvirt/cloud-init/{{ libvirt_vm_name }}-network-config.yml
+  delegate_to: "{{ libvirt_vm_hypervisor }}"
+  become: true
+
+- name: List all VMs
+  community.libvirt.virt:
+    command: list_vms
+  delegate_to: "{{ libvirt_vm_hypervisor }}"
+  register: libvirt_vm_list_all
+  become: true
+
+- name: Define virt-install argv list
+  ansible.builtin.set_fact:
+    virt_install_argv:
+      - virt-install
+      - --name={{ libvirt_vm_name }}
+      - --metadata
+      - title='{{ libvirt_vm_title }}',description='{{ libvirt_vm_description }}'
+      - --ram={{ libvirt_vm_ram }}
+      - --vcpus={{ libvirt_vm_vcpus }}
+      - --import
+      - --disk
+      - path={{ libvirt_vm_img_dest }}/{{ libvirt_vm_name }}-os,format=qcow2
+      - --os-variant
+      - detect=on,name={{ libvirt_vm_os_variant }}
+      - --network
+      - bridge=bridge-pub-lab,model=virtio
+      - --network
+      - bridge=virbr1,model=virtio
+      - --cloud-init
+      - network-config=/data/libvirt/cloud-init/{{ libvirt_vm_name }}-network-config.yml,user-data=/data/libvirt/cloud-init/{{ libvirt_vm_name }}-user-data.yml
+      - --noautoconsole
+      - --autostart
+
+- name: Debug
+  ansible.builtin.debug:
+    var: libvirt_vm_hostdev_list
+
+- name: Add hostdev to virt-install argv list
+  ansible.builtin.set_fact:
+    virt_install_argv: "{{ virt_install_argv + ['--hostdev', item | quote] }}"
+  loop: "{{ libvirt_vm_hostdev_list }}"
+
+- name: Create vm
+  ansible.builtin.command:
+    argv: "{{ virt_install_argv }}"
+  delegate_to: "{{ libvirt_vm_hypervisor }}"
+  when: libvirt_vm_name not in libvirt_vm_list_all.list_vms
+  become: true
+
+- name: Remove known host entries for created vm
+  ansible.builtin.known_hosts:
+    name: "{{ ansible_host }}"
+    state: absent
+  delegate_to: "localhost"
+  when: libvirt_vm_name not in libvirt_vm_list_all.list_vms
+
+- name: Get new ssh fingerprint
+  shell: "ssh-keyscan -H {{ ansible_host }}"
+  register: known_hosts
+  changed_when: false
+  delegate_to: "localhost"
+  when: libvirt_vm_name not in libvirt_vm_list_all.list_vms
+  retries: 18
+  delay: 10
+  until: known_hosts.rc == 0
+
+- name: Add known host entries for created vm
+  ansible.builtin.known_hosts:
+    name: "{{ ansible_host }}"
+    key: "{{ known_hosts.stdout }}"
+    state: present
+  delegate_to: "localhost"
+  when: libvirt_vm_name not in libvirt_vm_list_all.list_vms
+
+- name: Stop vm
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - shutdown
+      - "{{ libvirt_vm_name }}"
+  register: vm_stopped
+  delegate_to: "{{ libvirt_vm_hypervisor }}"
+  when: libvirt_vm_name not in libvirt_vm_list_all.list_vms
+  become: true
+  retries: 18
+  delay: 10
+  until: '"not running" in vm_stopped.stderr'
+  failed_when: '"not running" not in vm_stopped.stderr'
+
+- name: Start vm
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - start
+      - "{{ libvirt_vm_name }}"
+  register: vm_started
+  delegate_to: "{{ libvirt_vm_hypervisor }}"
+  when: libvirt_vm_name not in libvirt_vm_list_all.list_vms
+  become: true
+  retries: 18
+  delay: 10
+  until: '"already active" in vm_started.stderr'
+  failed_when: '"already active" not in vm_started.stderr'
+
+- name: Wait 600 seconds for target connection to become reachable/usable
+  ansible.builtin.wait_for_connection:
+
+- name: Fix / permissions
+  ansible.builtin.file:
+    path: /
+    mode: '0755'
+  become: true

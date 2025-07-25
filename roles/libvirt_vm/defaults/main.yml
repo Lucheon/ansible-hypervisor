@@ -1,0 +1,19 @@
+---
+libvirt_vm_hypervisor: localhost
+libvirt_vm_name: "{{ inventory_hostname }}"
+libvirt_vm_title: "{{ libvirt_vm_name | capitalize }}"
+libvirt_vm_description: ""
+libvirt_vm_domain: example.org
+libvirt_vm_img_src_dir: /data/libvirt/boot/
+libvirt_vm_img_src_file: Fedora-Cloud-Base-Generic-41-1.4.x86_64.qcow2
+libvirt_vm_img_dest: /data/libvirt/images
+libvirt_vm_img_size: 20G
+libvirt_vm_ram: 4096
+libvirt_vm_vcpus: 1
+libvirt_vm_os_variant: fedora-unknown
+libvirt_vm_eth0_ip_address: 10.0.2.2/24
+libvirt_vm_eth0_ip_gateway: 10.0.2.1
+libvirt_vm_eth1_ip_address: 172.20.0.102/24
+libvirt_vm_eth1_ip_gateway: 172.20.0.1
+libvirt_vm_hostdev_list: []
+libvirt_vm_users: []

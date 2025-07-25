@@ -1,0 +1,14 @@
+#cloud-config
+hostname: {{ libvirt_vm_name }}
+fqdn: {{ libvirt_vm_name }}.{{ libvirt_vm_domain }}
+
+disable_root: true
+
+users: {{ libvirt_vm_users }}
+
+packages:
+  - git
+
+package_update: true
+package_upgrade: true
+package_reboot_if_required: true
