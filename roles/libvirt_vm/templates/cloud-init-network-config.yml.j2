@@ -1,7 +1,11 @@
 network:
   version: 2
   ethernets:
+{% if libvirt_vm_use_eth_interface %}
+    eth0:
+{% else %}
     enp1s0:
+{% endif %}
       addresses:
         - {{ libvirt_vm_eth0_ip_address }}
       gateway4: {{ libvirt_vm_eth0_ip_gateway }}
@@ -9,7 +13,11 @@ network:
         addresses:
           - {{ libvirt_vm_eth0_ip_gateway }}
           - 8.8.8.8
+{% if libvirt_vm_use_eth_interface %}
+    eth1:
+{% else %}
     enp2s0:
+{% endif %}
       addresses:
         - {{ libvirt_vm_eth1_ip_address }}
       gateway4: {{ libvirt_vm_eth1_ip_gateway }}

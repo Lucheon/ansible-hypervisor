@@ -17,3 +17,4 @@ libvirt_vm_eth1_ip_address: 172.20.0.102/24
 libvirt_vm_eth1_ip_gateway: 172.20.0.1
 libvirt_vm_hostdev_list: []
 libvirt_vm_users: []
+libvirt_vm_use_eth_interface: false
